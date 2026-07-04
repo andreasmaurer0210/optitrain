@@ -11,6 +11,7 @@ and applies predictive pricing strategies to find the cheapest train fares in Ge
 | `get_station_details` | `id` | Station info + lines |
 | `get_journeys` | `from`, `to`, `departure?`, `arrival?`, `results?` | Timetable + prices |
 | `analyze_fare` | `from`, `to`, `travel_date`, `flexible_days?` | Full fare optimization report |
+| `check_api_health` | — | Check backend status (live vs mock mode) |
 | `analyze_split_ticket` | `from`, `to`, `travel_date` | Split-ticketing savings analysis |
 | `check_booking_window` | `from`, `to`, `travel_date` | 21-day threshold rule check |
 

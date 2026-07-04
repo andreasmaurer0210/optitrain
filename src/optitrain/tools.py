@@ -158,6 +158,14 @@ def get_tool_definitions() -> list[types.Tool]:
                 "required": ["from", "to", "travel_date"],
             },
         ),
+        types.Tool(
+            name="check_api_health",
+            description="Check which API backend is active and reachable. Use this first to diagnose if the server can connect to live data.",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+            },
+        ),
     ]
 
 
@@ -476,6 +484,41 @@ async def _handle_analyze_fare(
     return [types.TextContent(type="text", text="\n".join(lines))]
 
 
+async def _handle_check_api_health(
+    args: dict | None,
+) -> list[types.TextContent]:
+    """Check API backend status."""
+    health = await api.health_check()
+    mock = api.is_mock()
+    backend = api.get_active_backend()
+
+    lines = [
+        "## API Health",
+        "",
+        f"**Status:** {'🟢 Connected' if not mock else '🟡 Mock Mode'}",
+        f"**Active backend:** {backend or 'none (mock)'}",
+        "",
+        "### Backends",
+    ]
+
+    for name, info in health.get("backends", {}).items():
+        status_icon = "🟢" if info.get("reachable") else "🔴"
+        latency = f" ({info['latency_ms']}ms)" if info.get("latency_ms") else ""
+        error = f" — {info['error']}" if info.get("error") else ""
+        lines.append(f"  {status_icon} **{name}**: {info['url']}{latency}{error}")
+
+    if mock:
+        lines.extend([
+            "",
+            "### 📌 Mock Mode Active",
+            "The HAFAS API is not reachable. Using mock data + known stations.",
+            "All tools work — prices are estimates based on distance heuristics.",
+            "To restore live data, ensure the API backend is running.",
+        ])
+
+    return [types.TextContent(type="text", text="\n".join(lines))]
+
+
 # ---------------------------------------------------------------------------
 # Dispatching (defined after handlers to avoid NameError)
 # ---------------------------------------------------------------------------
@@ -487,6 +530,7 @@ HANDLERS: dict[str, callable] = {
     "check_booking_window": _handle_check_booking_window,
     "analyze_split_ticket": _handle_analyze_split_ticket,
     "analyze_fare": _handle_analyze_fare,
+    "check_api_health": _handle_check_api_health,
 }
 
 

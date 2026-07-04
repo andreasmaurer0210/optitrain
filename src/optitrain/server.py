@@ -76,11 +76,29 @@ INIT_OPTIONS = InitializationOptions(
 
 
 async def run_stdio() -> None:
-    """Start the MCP server over stdio transport."""
+    """Start the MCP server over stdio transport with background health check."""
     logger.info("OptiTrain starting (stdio transport)...")
+
+    # Background health check — don't block MCP startup
+    async def _background_health():
+        try:
+            health = await api.health_check()
+            if health["status"] == "connected":
+                backend = health["active_backend"]
+                lat = health["backends"][backend].get("latency_ms")
+                logger.info("API: %s — %s (%s)", backend, health["backends"][backend]["url"],
+                            f"{lat}ms" if lat else "?ms")
+            else:
+                logger.warning("API: %s — %s", health["status"], health.get("note", ""))
+        except Exception as exc:
+            logger.debug("Health check (bg): %s", exc)
+
+    health_task = asyncio.create_task(_background_health())
+
     try:
         async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
             await server.run(read_stream, write_stream, INIT_OPTIONS)
     finally:
+        health_task.cancel()
         await api.close()
         logger.info("OptiTrain shut down.")
