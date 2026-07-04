@@ -284,28 +284,69 @@ async def get_journeys(
 def _mock_journeys(
     from_id: str, to_id: str, departure: str | None, results: int = 5
 ) -> dict[str, Any]:
-    """Generate realistic mock journey data for demo/testing."""
     from_name = KNOWN_STATIONS.get(from_id, {}).get("name", f"Station {from_id}")
     to_name = KNOWN_STATIONS.get(to_id, {}).get("name", f"Station {to_id}")
 
-    mock_journeys = []
     base_price = _estimate_price(from_id, to_id)
+
     now = datetime.now()
 
-    for i in range(min(results, 5)):
-        dep_dt = now.replace(hour=6 + i * 2, minute=15)
-        arr_dt = dep_dt.replace(hour=dep_dt.hour + 2 + i, minute=45)
-        duration = int((arr_dt - dep_dt).total_seconds())
+    dep_dt = now.replace(hour=7, minute=0, second=0, microsecond=0)
+    if departure:
+        try:
+            dep_dt = datetime.fromisoformat(departure)
+        except ValueError:
+            pass
 
-        price_variation = base_price * (1 + i * 0.05)
+    days_until = (dep_dt.date() - now.date()).days
+
+    def _price_multiplier(days_out: int) -> float:
+        if days_out >= 21:
+            return 1.0
+        elif days_out >= 14:
+            return 1.25
+        elif days_out >= 7:
+            return 1.5
+        elif days_out >= 3:
+            return 1.8
+        elif days_out >= 0:
+            return 2.0
+        else:
+            return 2.5
+
+    def _price_hint(days_out: int) -> str:
+        if days_out >= 21:
+            return "Sparpreis"
+        elif days_out >= 14:
+            return "Sparpreis (moderate)"
+        elif days_out >= 7:
+            return "Sparpreis (high)"
+        elif days_out >= 3:
+            return "Flexpreis"
+        else:
+            return "Flexpreis (last-minute)"
+
+    multiplier = _price_multiplier(days_until)
+    hint = _price_hint(days_until)
+
+    mock_journeys = []
+    for i in range(min(results, 5)):
+        offset_h = i * 2
+        journey_dep = dep_dt.replace(hour=(dep_dt.hour + offset_h) % 24, minute=15)
+        journey_arr = journey_dep.replace(hour=(journey_dep.hour + 2 + i) % 24, minute=45)
+        duration = int((journey_arr - journey_dep).total_seconds())
+        if duration < 0:
+            duration += 86400
+
+        price_variation = base_price * multiplier * (1 + i * 0.05)
         mock_journeys.append({
             "type": "journey",
             "legs": [
                 {
                     "origin": {"name": from_name, "id": from_id},
                     "destination": {"name": to_name, "id": to_id},
-                    "departure": dep_dt.isoformat(),
-                    "arrival": arr_dt.isoformat(),
+                    "departure": journey_dep.isoformat(),
+                    "arrival": journey_arr.isoformat(),
                     "line": {
                         "product": "ICE",
                         "name": f"ICE {700 + i}",
@@ -313,7 +354,7 @@ def _mock_journeys(
                     "direction": to_name,
                 }
             ],
-            "price": {"amount": round(price_variation, 2), "currency": "EUR", "hint": "Sparpreis"},
+            "price": {"amount": round(price_variation, 2), "currency": "EUR", "hint": hint},
             "duration": duration,
         })
 
