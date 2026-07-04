@@ -8,8 +8,17 @@ from datetime import date
 import mcp.types as types
 
 from optitrain import api, strategies
-
 logger = logging.getLogger(__name__)
+
+
+def _suggest_station(hint: str, max_results: int = 5) -> str:
+    """Return a did-you-mean hint string, or empty if no match."""
+    results = api.search_known_stations(hint, max_results)
+    if not results:
+        return ""
+    names = [f"`{s['name']}` (ID: `{s['id']}`)" for s in results]
+    return f"\nDid you mean: {', '.join(names)}?"
+
 
 # ---------------------------------------------------------------------------
 # Tool definitions
@@ -216,10 +225,22 @@ async def _handle_get_station_details(
     try:
         data = await api.get_station(args["id"])
     except Exception as exc:
+        suggestion = _suggest_station(args["id"])
+        hint = f"\nStation ID `{args['id']}` not found.{suggestion}"
         return [
             types.TextContent(
                 type="text",
-                text=f"API error: {exc}",
+                text=f"API error: {exc}{hint}",
+            )
+        ]
+
+    if data.get("error"):
+        suggestion = _suggest_station(args["id"])
+        hint = f"{data['error']}.{suggestion}" if suggestion else data["error"]
+        return [
+            types.TextContent(
+                type="text",
+                text=f"Station `{args['id']}`: {hint}",
             )
         ]
 

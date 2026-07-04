@@ -166,12 +166,25 @@ for sid, sdata in KNOWN_STATIONS.items():
     KNOWN_STATIONS_BY_NAME[name_lower] = sid
 
 
-def _search_known_stations(query: str, results: int = 10) -> list[dict[str, Any]]:
+def search_known_stations(query: str, results: int = 10) -> list[dict[str, Any]]:
     q = query.lower()
     matches = []
+    seen: set[str] = set()
+    # Match by name
     for name_lower, sid in KNOWN_STATIONS_BY_NAME.items():
         if q in name_lower:
+            seen.add(sid)
             s = KNOWN_STATIONS[sid]
+            matches.append({
+                "id": sid,
+                "name": s["name"],
+                "type": "station",
+                "location": {"latitude": s["lat"], "longitude": s["lon"]},
+                "products": s["products"],
+            })
+    # Match by ID prefix
+    for sid, s in KNOWN_STATIONS.items():
+        if sid not in seen and q in sid.lower():
             matches.append({
                 "id": sid,
                 "name": s["name"],
@@ -201,7 +214,7 @@ async def search_stations(query: str, results: int = 10) -> list[dict[str, Any]]
         except Exception as exc:
             logger.warning("API search_stations failed, falling back: %s", exc)
 
-    return _search_known_stations(query, results)
+    return search_known_stations(query, results)
 
 
 async def get_station(id: str) -> dict[str, Any]:
